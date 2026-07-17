@@ -4,9 +4,11 @@ namespace Odnavi\Routing\Service;
 
 use Odnavi\Core\Service\{AttributeReader};
 use My\Cache;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 use Odnavi\Routing\Request;
+use Odnavi\Routing\Attribute\Operation;
 use Odnavi\Routing\Attribute\Route;
 
 final class RouteFactory
@@ -46,28 +48,34 @@ final class RouteFactory
 
                 /** @var Route[] $classRoutes */
                 $classRoutes = AttributeReader::getForClass($reflection, Route::class);
-                if ($classRoutes) {
-                    $group = $classRoutes[0]->getPath();
+                $classRoute  = $classRoutes[0] ?? null;
+                if ($classRoute) {
+                    $group = $classRoute->getPath();
                 }
+
+                // Класс-level preHandle — дефолтный гвард для всех ручек контроллера.
+                $classPreHandle = $classRoute?->getPreHandleName();
 
                 foreach (AttributeReader::getForMethods($reflection, attributeClass: Route::class) as ['method' => $method, 'attrs' => $attrs]) {
                     /** @var Route $route */
                     foreach ($attrs as $route) {
                         $group && $route->setGroup($group);
-
-                        $preHandlerName = $route->getPreHandlerName();
-                        if ($preHandlerName) {
-                            try {
-                                preg_match_all('/\{(\w+)\}/', $route->getPath(), $matches);
-                                $route
-                                    ->setPathParams($matches[1])
-                                    ->setPreHandler([$reflection->getName(), $reflection->getMethod($preHandlerName)->getName()]);
-                            } catch (ReflectionException) {}
-                        }
+                        self::applyPreHandle($reflection, $route, $classPreHandle);
 
                         self::$routes[] = $route;
                         $collection[] = $route->setCallback([$reflection->getName(), $method->getName()]);
                     }
+                }
+
+                // Авто-операции класса (#[Get], #[Post], ...) — сами являются Route.
+                foreach ($reflection->getAttributes(Operation::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+                    /** @var Operation $operation */
+                    $operation = $attribute->newInstance();
+                    $group && $operation->setGroup($group);
+                    self::applyPreHandle($reflection, $operation, $classPreHandle);
+
+                    self::$routes[] = $operation;
+                    $collection[]   = $operation->setCallback([$reflection->getName(), $operation->getHandler()]);
                 }
 
                 return $collection;
@@ -75,6 +83,41 @@ final class RouteFactory
         }
 
         $cache->set('route_map', self::$routes);
+    }
+
+    /**
+     * Проставляет маршруту path-параметры и резолвнутый preHandle.
+     * Если у ручки нет своего preHandle — применяется класс-level дефолт.
+     */
+    private static function applyPreHandle(ReflectionClass $reflection, Route $route, ?string $classPreHandle): void
+    {
+        $name = $route->getPreHandleName() ?? $classPreHandle;
+        if (!$name) {
+            return;
+        }
+
+        try {
+            preg_match_all('/\{(\w+)\}/', (string) $route->getPath(), $matches);
+            $route
+                ->setPathParams($matches[1])
+                ->setPreHandle(self::resolvePreHandle($reflection, $name));
+        } catch (ReflectionException) {}
+    }
+
+    /**
+     * Резолвит значение preHandle: callable-строка ('Class::method' / глобальная
+     * функция) — как есть; иначе — метод контроллера [класс, метод].
+     *
+     * @return array{0: string, 1: string}|string
+     * @throws ReflectionException Если имя-метод не найден в контроллере.
+     */
+    private static function resolvePreHandle(ReflectionClass $reflection, string $name): array|string
+    {
+        if (str_contains($name, '::') || function_exists($name)) {
+            return $name;
+        }
+
+        return [$reflection->getName(), $reflection->getMethod($name)->getName()];
     }
 
     public static function get(Request $request): ?Route
@@ -115,8 +158,7 @@ final class RouteFactory
                 'path'         => $route->getGroup() . $route->getPath(),
                 'methods'      => $route->getMethods(),
                 'requirements' => $route->getRequirements(),
-                'rules'        => $route->getRules(),
-                'pre_handler'  => $route->getPreHandler(),
+                'pre_handle'   => $route->getPreHandle(),
                 'handler'      => $route->getCallback(),
             ];
         }

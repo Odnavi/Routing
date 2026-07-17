@@ -12,22 +12,83 @@ class Route
     private ?string $group = null;
 
     private array  $callback;
-    private ?array $preHandler = null;
 
-    private ?string $preHandlerName;
+    /** Резолвнутый гвард preHandle: [класс, метод] (метод контроллера) либо callable-строка. */
+    private array|string|null $preHandle = null;
+
+    /** Значение preHandle из атрибута: имя метода контроллера или callable-строка. */
+    private ?string $preHandleName;
 
     private array $pathParams = [];
     private array $args       = [];
 
+    /** Отдавать список с метаданными пагинации ({items, pagination}) — только для GetCollection. */
+    protected bool $paginated = false;
+
+    /** Класс сущности (для операций-подклассов); задаёт репозиторий в bindRoute. */
+    protected ?string $entity = null;
+
+    /** Имя generic-метода-обработчика (для операций-подклассов). */
+    protected ?string $handler = null;
+
+    /** Имя метода-хука до операции (разрезолвлено: override ?? соглашение). */
+    protected ?string $hookBefore = null;
+
+    /** Имя метода-хука после операции. */
+    protected ?string $hookAfter = null;
+
+    /**
+     * @param ?string $path      Путь маршрута (на классе — префикс-группа).
+     * @param ?string $preHandle Гвард до обработчика: имя метода контроллера либо
+     *                           callable-строка ('Class::method' / глобальная функция).
+     * @param ?string $input     DTO входа: типизированные поля + валидация (#[Assert\*]).
+     * @param ?string $output    DTO выхода: форма ответа (реализует OutputDto::fromEntity).
+     */
     public function __construct(
         private readonly ?string $path = null,
         array|string $methods = ['GET'],
         private readonly array $requirements = [],
-        ?string $preHandler = null,
-        private readonly ?array $rules = null
+        ?string $preHandle = null,
+        private readonly ?string $input = null,
+        private readonly ?string $output = null
     ) {
-        $this->methods = (array)$methods;
-        $this->preHandlerName = $preHandler;
+        $this->methods       = (array)$methods;
+        $this->preHandleName = $preHandle;
+    }
+
+    public function isPaginated(): bool
+    {
+        return $this->paginated;
+    }
+
+    public function getInput(): ?string
+    {
+        return $this->input;
+    }
+
+    public function getOutput(): ?string
+    {
+        return $this->output;
+    }
+
+    public function getEntity(): ?string
+    {
+        return $this->entity;
+    }
+
+    public function getHandler(): ?string
+    {
+        return $this->handler;
+    }
+
+    public function getHookBefore(): ?string
+    {
+        return $this->hookBefore;
+    }
+
+    public function getHookAfter(): ?string
+    {
+        return $this->hookAfter;
     }
 
     public function getPath(): ?string
@@ -67,30 +128,25 @@ class Route
         return $this->methods;
     }
 
-    public function getPreHandlerName(): ?string
+    public function getPreHandleName(): ?string
     {
-        return $this->preHandlerName;
+        return $this->preHandleName;
     }
 
-    public function setPreHandler(array $value): self
+    public function setPreHandle(array|string $value): self
     {
-        $this->preHandler = $value;
+        $this->preHandle = $value;
         return $this;
     }
 
-    public function getPreHandler(): ?array
+    public function getPreHandle(): array|string|null
     {
-        return $this->preHandler;
+        return $this->preHandle;
     }
 
     public function getRequirements(): array
     {
         return $this->requirements;
-    }
-
-    public function getRules(): ?array
-    {
-        return $this->rules;
     }
 
     public function setPathParams(array $params): self
@@ -117,13 +173,58 @@ class Route
 
     public function handle(Request $request): mixed
     {
-        $preHandler = $this->preHandler;
-        $handler    = $this->callback;
+        $preHandle = $this->preHandle;
+        $handler   = $this->callback;
 
-        if ($preHandler) {
-            (new $preHandler[0])->{$preHandler[1]}($request);
+        if ($preHandle) {
+            is_array($preHandle)
+                ? (new $preHandle[0])->{$preHandle[1]}($request) // метод контроллера
+                : $preHandle($request);                          // callable-строка
         }
 
-        return (new $handler[0])->{$handler[1]}($request, ...$this->args);
+        $controller = new $handler[0];
+        if ($controller instanceof \Odnavi\Routing\Controller\ResourceAware) {
+            $controller->bindRoute($this);
+        }
+
+        // Без input-DTO — прежнее поведение: $request + именованные path-параметры.
+        if (!$this->input) {
+            return $controller->{$handler[1]}($request, ...$this->args);
+        }
+
+        $input = \Odnavi\Routing\Service\InputValidator::create($this->input, $request);
+        if ($controller instanceof \Odnavi\Routing\Controller\AbstractController) {
+            $controller->setInput($input);
+        }
+
+        return $controller->{$handler[1]}(...$this->resolveArguments($handler, $request, $input));
+    }
+
+    /**
+     * Собирает именованные аргументы обработчика: Request и input-DTO по типу,
+     * path-параметры по имени.
+     *
+     * @param array{0: class-string, 1: string} $handler
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveArguments(array $handler, Request $request, object $input): array
+    {
+        $resolved = [];
+
+        foreach ((new \ReflectionMethod($handler[0], $handler[1]))->getParameters() as $parameter) {
+            $name = $parameter->getName();
+            $type = $parameter->getType() instanceof \ReflectionNamedType ? $parameter->getType()->getName() : null;
+
+            if ($type === Request::class || is_a($request, (string) $type)) {
+                $resolved[$name] = $request;
+            } elseif ($type === $this->input || ($type && $input instanceof $type)) {
+                $resolved[$name] = $input;
+            } elseif (array_key_exists($name, $this->args)) {
+                $resolved[$name] = $this->args[$name];
+            }
+        }
+
+        return $resolved;
     }
 }
