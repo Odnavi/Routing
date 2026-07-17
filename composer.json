@@ -1,0 +1,25 @@
+{
+    "name": "odnavi/routing",
+    "description": "Атрибутный роутинг: #[Route], сканер контроллеров (ClassScanner) и фабрика маршрутов (RouteFactory) с кэшем route_map.",
+    "type": "library",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Ivan Parfentev"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-reflection": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Odnavi\\Routing\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true
+    }
+}
