@@ -2,14 +2,12 @@
 
 namespace Odnavi\Routing\Service;
 
-use My\Exception\InvalidArgumentException;
+use Odnavi\Routing\Exception\ValidationException;
 use Odnavi\Core\Service\ReflectionFactory;
 use Odnavi\Core\Util\StringUtil;
 use Odnavi\Routing\Request;
-use ReflectionClass;
 use ReflectionProperty;
-use Symfony\Component\Validator\ConstraintViolationListInterface;
-use Symfony\Component\Validator\Validation;
+use Symfony\Component\Validator\{ConstraintViolationListInterface, Validation};
 
 /**
  * Строит типизированный input-DTO из запроса и валидирует его по атрибутам #[Assert\*].
@@ -24,7 +22,7 @@ final class InputValidator
      *
      * @param class-string $dtoClass
      *
-     * @throws InvalidArgumentException При ошибках валидации.
+     * @throws ValidationException При ошибках валидации.
      */
     public static function create(string $dtoClass, Request $request): object
     {
@@ -71,7 +69,7 @@ final class InputValidator
     }
 
     /**
-     * @throws InvalidArgumentException При нарушениях валидации.
+     * @throws ValidationException При нарушениях валидации.
      */
     public static function validate(object $dto): void
     {
@@ -79,7 +77,7 @@ final class InputValidator
         $violations = $validator->validate($dto);
 
         if ($violations->count() > 0) {
-            throw new InvalidArgumentException(self::format($violations));
+            throw new ValidationException(self::format($violations));
         }
     }
 

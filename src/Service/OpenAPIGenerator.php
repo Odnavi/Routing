@@ -2,7 +2,6 @@
 
 namespace Odnavi\Routing\Service;
 
-use Api\Dto\Response\AbstractResponse;
 use Odnavi\Core\Service\ReflectionFactory;
 use ReflectionParameter;
 
@@ -193,7 +192,7 @@ class OpenAPIGenerator
     /**
      * Возвращает класс рантайм-DTO ответа контроллера ($responseDtoClass), если он задан.
      *
-     * @return class-string<AbstractResponse>|null
+     * @return class-string|null
      */
     private static function resolveControllerResponseDto(string $controllerClass): ?string
     {
@@ -207,7 +206,7 @@ class OpenAPIGenerator
 
             return is_string($dtoClass)
                 && class_exists($dtoClass)
-                && is_subclass_of($dtoClass, AbstractResponse::class)
+                && method_exists($dtoClass, 'fromEntity')
                     ? $dtoClass
                     : null;
         } catch (\ReflectionException) {

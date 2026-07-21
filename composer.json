@@ -2,7 +2,7 @@
     "name": "odnavi/routing",
     "description": "Атрибутный роутинг: #[Route], сканер контроллеров (ClassScanner) и фабрика маршрутов (RouteFactory) с кэшем route_map.",
     "type": "library",
-    "license": "proprietary",
+    "license": "MIT",
     "authors": [
         {
             "name": "Ivan Parfentev"
@@ -10,7 +10,9 @@
     ],
     "require": {
         "php": ">=8.2",
-        "ext-reflection": "*"
+        "odnavi/core": "^1.0",
+        "odnavi/orm": "^1.0",
+        "symfony/validator": "^7.3"
     },
     "autoload": {
         "psr-4": {

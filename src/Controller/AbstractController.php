@@ -2,8 +2,7 @@
 
 namespace Odnavi\Routing\Controller;
 
-use Api\JsonResponse;
-use Api\Dto\Response\PaginatedResponse;
+use Odnavi\Routing\JsonResponse;
 use Odnavi\Core\Service\ReflectionFactory;
 use Odnavi\Orm\Attribute\Entity;
 use Odnavi\Orm\Entity\{AbstractEntity, Collection};
@@ -14,7 +13,7 @@ use Odnavi\Core\Util\StringUtil;
 use ReflectionAttribute;
 use Odnavi\Routing\Request;
 use Odnavi\Routing\Attribute\Route;
-use My\Security\Auth;
+use Odnavi\Routing\Dto\PaginatedResponse;
 
 abstract class AbstractController implements ResourceAware
 {
@@ -60,34 +59,6 @@ abstract class AbstractController implements ResourceAware
     public function setInput(object $input): void
     {
         $this->input = $input;
-    }
-
-    /**
-     * Идентификатор текущего пользователя или null, если не аутентифицирован.
-     */
-    protected function currentUserId(): ?int
-    {
-        return Auth::get()->getCurrentUserId();
-    }
-
-    /**
-     * Возвращает идентификатор текущего пользователя.
-     *
-     * @throws \Exception\UnauthorizedException Если пользователь не аутентифицирован.
-     */
-    protected function requireUserId(): int
-    {
-        return Auth::get()->requireUserId();
-    }
-
-    /**
-     * Проверяет, что ресурс принадлежит текущему пользователю.
-     *
-     * @throws \Exception\ForbiddenException Если ресурс чужой.
-     */
-    protected function assertOwner(int $userId): void
-    {
-        Auth::get()->assertUserId($userId);
     }
 
     /**

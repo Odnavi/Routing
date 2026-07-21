@@ -2,14 +2,13 @@
 
 namespace Odnavi\Routing\Service;
 
-use Odnavi\Core\Service\{AttributeReader};
-use My\Cache;
+use Odnavi\Core\Service\AttributeReader;
+use Odnavi\Core\{CacheRegistry, Profiler};
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 use Odnavi\Routing\Request;
-use Odnavi\Routing\Attribute\Operation;
-use Odnavi\Routing\Attribute\Route;
+use Odnavi\Routing\Attribute\{Operation, Route};
 
 final class RouteFactory
 {
@@ -29,7 +28,7 @@ final class RouteFactory
 
     public static function load(): void
     {
-        $cache  = Cache::getInstance();
+        $cache  = CacheRegistry::get();
         $cached = $cache->get('route_map');
         // Кэш валиден, только если это массив настоящих Route. После переезда
         // класса (например, Core\Attribute\Route → Routing\Attribute\Route)
@@ -125,7 +124,7 @@ final class RouteFactory
         $requestPath   = $request->getPathInfo();
         $requestMethod = $request->getMethod();
 
-        \Odnavi\Core\Profiler::startTimer('search route');
+        Profiler::startTimer('search route');
         self::load();
 
         $found = null;
@@ -146,7 +145,7 @@ final class RouteFactory
             }
         }
 
-        \Odnavi\Core\Profiler::stopTimer();
+        Profiler::stopTimer();
         return $found;
     }
 
