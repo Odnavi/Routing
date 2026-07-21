@@ -46,7 +46,7 @@ composer dump-autoload -o
 use Odnavi\Routing\Attribute\Route;
 use Odnavi\Routing\Controller\AbstractController;
 use Odnavi\Routing\Request;
-use Api\JsonResponse;
+use Odnavi\Routing\JsonResponse;
 
 #[Route('/api/v1/things')]
 class ThingController extends AbstractController
@@ -266,7 +266,7 @@ class ThingController extends AbstractController { public function auth(): void 
      доступа к `output`-DTO в `prepareItem`/`prepareItems`);
    - если задан `input` — валидирует и инъектит DTO аргументом;
    - вызывает обработчик, path-параметры передаются по имени.
-3. Обработчик возвращает `Api\JsonResponse`.
+3. Обработчик возвращает `Odnavi\Routing\JsonResponse`.
 
 **Кэш маршрутов** живёт в Redis под ключом `route_map`. После добавления/изменения
 маршрутов сбрось кэш и пересобери автолоадер:

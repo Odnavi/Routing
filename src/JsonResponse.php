@@ -17,8 +17,7 @@ class JsonResponse
         private readonly mixed $data = null,
         private int $status = 200,
         private readonly array $headers = [],
-    ) {
-    }
+    ) {}
 
     /**
      * Устанавливает HTTP-статус ответа.
