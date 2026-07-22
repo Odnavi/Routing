@@ -3,14 +3,10 @@
 namespace Odnavi\Routing\Controller;
 
 use Odnavi\Routing\JsonResponse;
-use Odnavi\Core\Service\ReflectionFactory;
-use Odnavi\Orm\Attribute\Entity;
-use Odnavi\Orm\Entity\{AbstractEntity, Collection};
-use Odnavi\Orm\Repository\EntityRepository;
-use Odnavi\Orm\Service\RepositoryFactory;
+use Odnavi\Core\Contract\{Entity, EntityCollection, Repository};
 use Odnavi\Core\DbRegistry;
+use Odnavi\Core\RepositoryRegistry;
 use Odnavi\Core\Util\StringUtil;
-use ReflectionAttribute;
 use Odnavi\Routing\Request;
 use Odnavi\Routing\Attribute\Route;
 use Odnavi\Routing\Dto\PaginatedResponse;
@@ -18,7 +14,7 @@ use Odnavi\Routing\Dto\PaginatedResponse;
 abstract class AbstractController implements ResourceAware
 {
     protected string $entityClass;
-    protected EntityRepository $repo;
+    protected Repository $repo;
 
     /** Маршрут, по которому вызван контроллер (доступен после диспатча). */
     protected ?Route $route = null;
@@ -26,14 +22,14 @@ abstract class AbstractController implements ResourceAware
     /** Валидированный input-DTO текущего запроса (если задан #[Route(input: ...)]). */
     protected ?object $input = null;
 
-    public function __construct(?EntityRepository $repo = null)
+    public function __construct(?Repository $repo = null)
     {
         if ($repo) {
             $this->repo = $repo;
             return;
         }
 
-        isset($this->entityClass) && $this->repo = RepositoryFactory::get($this->entityClass);
+        isset($this->entityClass) && $this->repo = RepositoryRegistry::get($this->entityClass);
     }
 
     /**
@@ -49,7 +45,7 @@ abstract class AbstractController implements ResourceAware
 
         if ($entity = $route->getEntity()) {
             $this->entityClass = $entity;
-            $this->repo        = RepositoryFactory::get($entity);
+            $this->repo        = RepositoryRegistry::get($entity);
         }
     }
 
@@ -64,15 +60,15 @@ abstract class AbstractController implements ResourceAware
     /**
      * Подготавливает коллекцию сущностей к выводу
      *
-     * @param Collection $collection
+     * @param EntityCollection $collection
      * @param array $fields
      *
      * @return JsonResponse
      */
-    protected function prepareItems(Collection $collection, array $fields): JsonResponse
+    protected function prepareItems(EntityCollection $collection, array $fields): JsonResponse
     {
         if ($output = $this->route?->getOutput()) {
-            return new JsonResponse($collection->map(static fn(AbstractEntity $entity) => $output::fromEntity($entity)->toArray()));
+            return new JsonResponse($collection->map(static fn(Entity $entity) => $output::fromEntity($entity)->toArray()));
         }
 
         return new JsonResponse($collection->toArray());
@@ -81,12 +77,12 @@ abstract class AbstractController implements ResourceAware
     /**
      * Подготавливает сущность к выводу
      *
-     * @param AbstractEntity $entity
+     * @param Entity $entity
      * @param array|null $fields
      *
      * @return JsonResponse
      */
-    protected function prepareItem(AbstractEntity $entity, ?array $fields = null): JsonResponse
+    protected function prepareItem(Entity $entity, ?array $fields = null): JsonResponse
     {
         if ($output = $this->route?->getOutput()) {
             return new JsonResponse($output::fromEntity($entity)->toArray());
@@ -110,7 +106,7 @@ abstract class AbstractController implements ResourceAware
      *
      * @param array<string, mixed> $fields
      */
-    protected function fillEntity(AbstractEntity $entity, array $fields): void
+    protected function fillEntity(Entity $entity, array $fields): void
     {
         foreach ($fields as $field => $value) {
             $setter = 'set' . StringUtil::toCamelCase($field, true);
@@ -266,77 +262,10 @@ abstract class AbstractController implements ResourceAware
     /**
      * Вызывает метод-хук операции, если он задан и определён в контроллере.
      */
-    protected function callHook(?string $name, AbstractEntity $entity, Request $request, ?AbstractEntity $old = null): void
+    protected function callHook(?string $name, Entity $entity, Request $request, ?Entity $old = null): void
     {
         if ($name && method_exists($this, $name)) {
             $this->{$name}($entity, $request, $old);
-        }
-    }
-
-
-    public function preloadRelations(): void
-    {
-        if (empty($this->collection)) {
-            return; // Нет элементов в коллекции
-        }
-
-        // Кэш свойств с атрибутом Entity
-        $reflection = ReflectionFactory::getClass(reset($this->collection));
-        if ($reflection === null) {
-            return;
-        }
-        $properties = $reflection->getProperties();
-
-        // Группируем все сущности по типу
-        $relations = [];
-        foreach ($properties as $property) {
-            $name = $property->getName();
-            $attributes = $property->getAttributes(Entity::class);
-
-            if (empty($attributes)) {
-                continue;
-            }
-
-            /** @var ReflectionAttribute $attribute */
-            $attribute = reset($attributes);
-
-            $args = $attribute->getArguments();
-            if ($entityClass = $args['class']) {
-                $relations[$entityClass] = [
-                    'name'        => $name,
-                    'foreign_key' => $args['foreignKey'],
-                    'setter'      => 'set' . ucfirst($name),
-                    'getter'      => 'get' . ucfirst($args['foreignKey'])
-                ];
-            }
-        }
-
-        if (!$relations) {
-            return;
-        }
-
-        $data = $this->reduce(function (array $carry, AbstractEntity $entity) use ($relations) {
-            foreach ($relations as $entityClass => $args) {
-                $carry[$entityClass][] = $entity->{$args['getter']}();
-            }
-            return $carry;
-        });
-
-        $relationsData = [];
-        // Загружаем сущности одним запросом для каждого типа
-        foreach ($relations as $entityClass => $args) {
-            !empty($data[$entityClass]) && $relationsData[$entityClass] = RepositoryFactory::get($entityClass)
-                ->findAll(['id' => array_filter(array_unique($data[$entityClass]))])
-                ->pluck(null, fn($entity) => $entity->getId());
-        }
-
-        foreach ($this->collection as $entity) {
-            foreach ($relations as $entityClass => $args) {
-                $id = $entity->{$args['getter']}();
-                if (!empty($relationsData[$entityClass][$id])) {
-                    $entity->{$args['setter']}($relationsData[$entityClass][$id]);
-                }
-            }
         }
     }
 

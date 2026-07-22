@@ -10,6 +10,7 @@ class Request
 {
     /**
      * @param ParameterBag $query   Параметры строки запроса ($_GET).
+     * @param ParameterBag $cookies Cookie запроса ($_COOKIE).
      * @param ParameterBag $headers Заголовки запроса.
      * @param string       $method  HTTP-метод в верхнем регистре.
      * @param string       $pathInfo Путь запроса без query-строки.
@@ -17,6 +18,7 @@ class Request
      */
     public function __construct(
         public readonly ParameterBag $query,
+        public readonly ParameterBag $cookies,
         public readonly ParameterBag $headers,
         private readonly string $method,
         private readonly string $pathInfo,
@@ -31,6 +33,7 @@ class Request
     {
         return new static(
             new ParameterBag($_GET),
+            new ParameterBag($_COOKIE),
             new ParameterBag(self::readHeaders()),
             strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
             self::readPathInfo(),

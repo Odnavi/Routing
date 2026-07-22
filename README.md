@@ -146,16 +146,16 @@ class ThingController extends AbstractController
 переопределяются через `beforeHook`/`afterHook` в атрибуте.
 
 ```php
-use Odnavi\Orm\Entity\AbstractEntity;
+use Odnavi\Core\Contract\Entity;
 
 // по соглашению
-protected function beforeCreate(AbstractEntity $entity, Request $request): void
+protected function beforeCreate(Entity $entity, Request $request): void
 {
     $entity->setUserId($this->requireUserId());
 }
 
 // override имени: #[Delete(entity: ..., afterHook: 'onDeleted')]
-protected function onDeleted(AbstractEntity $entity, Request $request): void { /* ... */ }
+protected function onDeleted(Entity $entity, Request $request): void { /* ... */ }
 ```
 
 Сигнатуры: create/delete — `($entity, $request)`; update — `($entity, $request, $old)`
